@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto-sensornet
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    networks:
+      - sensornet
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb-sensornet
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: adminpass123
+      DOCKER_INFLUXDB_INIT_ORG: my-org
+      DOCKER_INFLUXDB_INIT_BUCKET: telegraf
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: sensornet-token
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-storage:/var/lib/influxdb2
+    networks:
+      - sensornet
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf-sensornet
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    ports:
+      - "8125:8125/udp"
+    networks:
+      - sensornet
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+      - mosquitto
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-sensornet
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: grafanapass123
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    networks:
+      - sensornet
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+
+volumes:
+  influxdb-storage:
+  grafana-storage:
+  mosquitto-data:
+  mosquitto-log:
+
+networks:
+  sensornet:
+    driver: bridge
