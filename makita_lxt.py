@@ -430,6 +430,13 @@ class ModuleApplication(tk.Frame):
                     )
                     if before_state and after_state and not effect_detected:
                         self.obi_instance.update_debug("Reset commands were accepted but state did not change.")
+                        if "1830" in model_name:
+                            self.obi_instance.update_debug(
+                                "Known limitation: many BL1830/F0513 packs do not expose a public command to clear this lock flag."
+                            )
+                            self.obi_instance.update_debug(
+                                "If the thermal/fuse path has blown, software reset alone will not recover charging."
+                            )
 
                 if after_state:
                     self.insert_battery_data(
