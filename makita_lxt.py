@@ -334,7 +334,9 @@ class ModuleApplication(tk.Frame):
 
         try:
             model_name = self.current_model.upper()
-            if "1830" in model_name:
+            run_all_sequences = "1830" in model_name
+
+            if run_all_sequences:
                 reset_sequences = [
                     ("legacy-rom", TESTMODE_LEGACY_CMD, RESET_ERROR_LEGACY_CMD),
                     ("legacy-skip-rom", TESTMODE_CC_CMD, RESET_ERROR_CC_CMD),
@@ -352,6 +354,7 @@ class ModuleApplication(tk.Frame):
                 ]
 
             last_exception = None
+            successful_sequences = []
 
             for sequence_name, testmode_cmd, reset_cmd in reset_sequences:
                 try:
@@ -360,9 +363,18 @@ class ModuleApplication(tk.Frame):
                     self.interface.request(testmode_cmd)
                     time.sleep(0.05)
                     self.interface.request(reset_cmd)
-                    return
+                    successful_sequences.append(sequence_name)
+                    if not run_all_sequences:
+                        return
                 except Exception as e:
                     last_exception = e
+
+            if successful_sequences:
+                if self.obi_instance and run_all_sequences:
+                    self.obi_instance.update_debug(
+                        f"Completed reset sequences: {', '.join(successful_sequences)}"
+                    )
+                return
 
             if last_exception:
                 raise last_exception
