@@ -196,6 +196,23 @@ class ModuleApplication(tk.Frame):
         swapped_byte = upper_nibble | lower_nibble  # Combine the nibbles
         return swapped_byte
 
+    def _read_error_state(self):
+        response = self.interface.request(READ_MSG_CMD)
+        lock_nibble = response[30] & 0x0F
+        status_code = response[29]
+        lock_status = "LOCKED" if lock_nibble > 0 else "UNLOCKED"
+        return {
+            "status_code": status_code,
+            "lock_nibble": lock_nibble,
+            "lock_status": lock_status,
+        }
+
+    def _format_error_state(self, state):
+        return (
+            f"status=0x{state['status_code']:02X}, "
+            f"state={state['lock_status']} (nibble=0x{state['lock_nibble']:X})"
+        )
+
     def on_read_static_click(self):
         commands = [self.get_model, self.get_f0513_model]
 
@@ -335,6 +352,7 @@ class ModuleApplication(tk.Frame):
         try:
             model_name = self.current_model.upper()
             run_all_sequences = "1830" in model_name
+            try_fallback_on_no_change = model_name == ""
 
             if run_all_sequences:
                 reset_sequences = [
@@ -355,6 +373,19 @@ class ModuleApplication(tk.Frame):
 
             last_exception = None
             successful_sequences = []
+            effect_detected = False
+            before_state = None
+            after_state = None
+
+            try:
+                before_state = self._read_error_state()
+                if self.obi_instance:
+                    self.obi_instance.update_debug(
+                        f"Error state before reset: {self._format_error_state(before_state)}"
+                    )
+            except Exception as e:
+                if self.obi_instance:
+                    self.obi_instance.update_debug(f"Could not read state before reset: {e}")
 
             for sequence_name, testmode_cmd, reset_cmd in reset_sequences:
                 try:
@@ -364,15 +395,48 @@ class ModuleApplication(tk.Frame):
                     time.sleep(0.05)
                     self.interface.request(reset_cmd)
                     successful_sequences.append(sequence_name)
+
+                    try:
+                        time.sleep(0.05)
+                        after_state = self._read_error_state()
+                        if self.obi_instance:
+                            self.obi_instance.update_debug(
+                                f"Error state after {sequence_name}: {self._format_error_state(after_state)}"
+                            )
+
+                        if before_state and (
+                            after_state["status_code"] != before_state["status_code"]
+                            or after_state["lock_nibble"] != before_state["lock_nibble"]
+                        ):
+                            effect_detected = True
+                    except Exception as state_error:
+                        if self.obi_instance:
+                            self.obi_instance.update_debug(
+                                f"Could not read state after {sequence_name}: {state_error}"
+                            )
+
                     if not run_all_sequences:
-                        return
+                        if effect_detected:
+                            return
+                        if not try_fallback_on_no_change:
+                            return
                 except Exception as e:
                     last_exception = e
 
             if successful_sequences:
-                if self.obi_instance and run_all_sequences:
+                if self.obi_instance:
                     self.obi_instance.update_debug(
                         f"Completed reset sequences: {', '.join(successful_sequences)}"
+                    )
+                    if before_state and after_state and not effect_detected:
+                        self.obi_instance.update_debug("Reset commands were accepted but state did not change.")
+
+                if after_state:
+                    self.insert_battery_data(
+                        {
+                            "State": after_state["lock_status"],
+                            "Status code": f"{after_state['status_code']:02X}",
+                        }
                     )
                 return
 
