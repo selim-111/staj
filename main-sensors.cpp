@@ -21,17 +21,17 @@ void drawSignalIcon(int x, int y, int rssi);
 void drawStatusIcons(int x, int y, bool wifiOk, bool mqttOk, bool uploading);
 
 // --- Configuration ---
-const char* WIFI_SSID = "TRGOZ.DAG";
-const char* WIFI_PASS = "trgoz.dag";
+const char* WIFI_SSID = "XXX";
+const char* WIFI_PASS = "XXX";
 const char* FIRMWARE_VERSION = "0.0.8"; 
 
 const char* API_URLS[] = {
-    "http://10.141.5.226:7120"
+    "XXX"
 };
 const int API_URL_COUNT = 1;
 
 const char* MQTT_BROKER_URLS[] = {
-    "http://10.141.5.226:1883"
+    "XXX"
 };
 const int MQTT_BROKER_COUNT = 1;
 const int MQTT_PORT = 1883;
